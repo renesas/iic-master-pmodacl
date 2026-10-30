@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc 3.11" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>README-IIC-Master</title>
+  <style>
+
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+</style>
+  <style type="text/css">:root {
+--brand: #2b0a8c;
+--accent: #e6007e;
+--ink: #1f2430;
+--muted: #667085;
+--line: #e4e7ec;
+--surface: #f7f7fb;
+}
+* {
+box-sizing: border-box;
+}
+html {
+scroll-behavior: smooth;
+}
+body {
+margin: 0 auto;
+max-width: 1120px;
+padding: 50px;
+color: var(--ink);
+background: #ffffff;
+font-family: "Segoe UI", Arial, sans-serif;
+line-height: 1.65;
+}
+a {
+color: var(--brand);
+}
+a:hover {
+color: var(--accent);
+}
+h1 {
+margin-top: 2.7rem;
+padding-bottom: 0.35rem;
+border-bottom: 2px solid var(--line);
+}
+h2 {
+margin-top: 2.4rem;
+padding-bottom: 0.3rem;
+border-bottom: 1px solid var(--line);
+}
+h3,
+h4,
+h5,
+h6 {
+margin-top: 2rem;
+}
+img {
+display: block;
+max-width: 100%;
+height: auto;
+margin: 1rem auto 0.35rem;
+}
+table {
+width: 100%;
+border-collapse: collapse;
+margin: 1.25rem 0;
+}
+th,
+td {
+border: 1px solid var(--line);
+padding: 0.7rem;
+vertical-align: top;
+}
+th {
+background: var(--surface);
+text-align: left;
+}
+blockquote {
+margin: 1.2rem 0;
+padding: 0.7rem 1rem;
+border-left: 4px solid var(--brand);
+background: var(--surface);
+}
+code {
+font-family: Consolas, "Courier New", monospace;
+}
+pre {
+overflow-x: auto;
+padding: 1rem;
+border-radius: 8px;
+background: var(--surface);
+}
+
+body > h1:first-of-type {
+margin: -50px calc(50% - 50vw) 3rem;
+padding: 3.5rem max(50px, calc((100vw - 1120px) / 2));
+border: 0;
+background: linear-gradient(135deg, #250777, #3e16a3);
+color: #ffffff;
+font-size: clamp(2rem, 5vw, 3.5rem);
+line-height: 1.1;
+}
+@media (max-width: 640px) {
+body {
+padding: 20px;
+}
+body > h1:first-of-type {
+margin-top: -20px;
+padding: 2.5rem 20px;
+}
+}
+</style>
+</head>
+<body>
+<h1 id="iic-master">IIC Master</h1>
+<h2 id="overview">Overview</h2>
+<p>This Software Building Block demonstrates use of the Renesas FSP IIC
+Master HAL APIs to communicate with a Digilent Pmod ACL board containing
+an ADXL345 accelerometer. The reference application opens the IIC
+master, verifies the sensor device ID, enables measurement, periodically
+reads the six X/Y/Z data bytes, converts the byte pairs to signed 16-bit
+axis values, and prints the results to a serial terminal. Communication
+and initialization errors are also reported on the terminal.</p>
+<p>This documentation applies only to these reference boards:</p>
+<ul>
+<li>FPB-RA0L1</li>
+<li>FPB-RA2E3</li>
+<li>FPB-RA4E2</li>
+<li>FPB-RA6E2</li>
+<li>FPB-RA8E1</li>
+</ul>
+<h2 id="1-what-use-case-does-this-sbb-demonstrate">1. What use case does
+this SBB demonstrate?</h2>
+<p>The SBB demonstrates a basic MCU-to-sensor I2C/IIC master use case. A
+Renesas RA MCU acts as the IIC master and communicates with the ADXL345
+accelerometer on the Pmod ACL board. After initialization, the
+application repeatedly reads acceleration data for the X, Y, and Z axes
+and displays it through the UART-backed console.</p>
+<p>The example is intended to show the typical sequence for using an FSP
+IIC Master HAL module:</p>
+<ol type="1">
+<li>Initialize the console used by the reference application.</li>
+<li>Open the configured IIC Master instance.</li>
+<li>Read the ADXL345 device ID and verify the expected signature
+(<code>0xE5</code>).</li>
+<li>Write the ADXL345 <code>POWER_CTL</code> register
+(<code>0x2D</code>) to enable measurement.</li>
+<li>Select the axis-data register (<code>0x32</code>) using an IIC write
+with repeated start.</li>
+<li>Read six bytes containing the X, Y, and Z axis data.</li>
+<li>Convert each byte pair into a signed 16-bit axis value.</li>
+<li>Print the values on the serial terminal.</li>
+<li>Repeat after the configured reference-application delay.</li>
+</ol>
+<h2 id="2-what-does-the-sbb-core-code-do">2. What does the SBB core code
+do?</h2>
+<p>The reusable sensor-facing code is implemented in
+<code>iic_sensor.c</code> and <code>iic_sensor.h</code>.</p>
+<p>The core code:</p>
+<ul>
+<li>Provides a small public interface for sensor initialization, data
+acquisition, and deinitialization.</li>
+<li>Opens the selected FSP IIC Master driver instance through
+compatibility macros.</li>
+<li>Reads and validates the ADXL345 device ID.</li>
+<li>Enables ADXL345 measurement mode.</li>
+<li>Performs IIC writes and reads.</li>
+<li>Uses the IIC Master callback to capture transfer-completion
+events.</li>
+<li>Waits for the asynchronous transfer event and returns an error when
+a transfer aborts or the local polling timeout expires.</li>
+<li>Reads the six raw accelerometer data bytes into a caller-provided
+buffer.</li>
+<li>Closes the IIC Master module during deinitialization.</li>
+</ul>
+<p>The implementation selects the FSP master API at compile time. It can
+map the SBB operations to <code>r_iica_master</code>,
+<code>r_iic_b_master</code>, or <code>r_iic_master</code>, depending on
+the MCU/board configuration.</p>
+<h2 id="3-demoreference-application-code-versus-reusable-sbb-code">3.
+Demo/reference application code versus reusable SBB code</h2>
+<h3 id="reusable-sbb-code">Reusable SBB code</h3>
+<p>The primary reusable interface is contained in:</p>
+<ul>
+<li><code>iic_sensor.c</code></li>
+<li><code>iic_sensor.h</code></li>
+</ul>
+<p>These files contain the sensor and IIC transaction logic. An
+application can call this interface without reproducing the reference
+application’s terminal formatting and continuous demonstration loop.</p>
+<h3 id="demoreference-application-code">Demo/reference application
+code</h3>
+<p>The following files form the demonstration application layer:</p>
+<ul>
+<li><code>iic_master_example_app.c</code></li>
+<li><code>iic_master_example_app.h</code></li>
+</ul>
+<p>The reference application:</p>
+<ul>
+<li>Initializes the UART console.</li>
+<li>Retrieves and prints the FSP version.</li>
+<li>Prints the SBB information banner.</li>
+<li>Calls the reusable sensor API.</li>
+<li>Converts raw axis bytes to signed values for display.</li>
+<li>Prints X/Y/Z values.</li>
+<li>Delays three seconds between reads.</li>
+<li>Prints an error, deinitializes the sensor, and enters a breakpoint
+trap when an SBB operation fails.</li>
+</ul>
+<p><code>iic_master_example_app_run()</code> is the reference
+application’s single entry point intended to be called by
+<code>hal_entry.c</code>.</p>
+<h2 id="4-which-public-functions-should-i-look-at-first">4. Which public
+functions should I look at first?</h2>
+<p>Start with these functions from <code>iic_sensor.h</code>:</p>
+<h3 id="fsp_err_t-init_sensorvoid"><code>fsp_err_t init_sensor(void)</code></h3>
+<p>Initializes the configured IIC Master module, reads the ADXL345
+device ID, verifies that it equals <code>DEVICE_SIGNATURE</code>
+(<code>0xE5</code>), and enables measurement through the ADXL345
+<code>POWER_CTL</code> register.</p>
+<h3 id="fsp_err_t-read_sensor_datauint8_t--xyz_data"><code>fsp_err_t read_sensor_data(uint8_t * xyz_data)</code></h3>
+<p>Reads the six raw bytes containing X, Y, and Z acceleration data. The
+caller must provide a valid buffer large enough for
+<code>SENSOR_DATA_SIZE</code> bytes.</p>
+<h3 id="void-deinit_sensorvoid"><code>void deinit_sensor(void)</code></h3>
+<p>Closes the IIC Master module when it is open.</p>
+<p>For understanding the complete reference flow, also review:</p>
+<h3 id="void-iic_master_example_app_runvoid"><code>void iic_master_example_app_run(void)</code></h3>
+<p>This is the demo entry point. It shows the intended order of console
+initialization, SBB initialization, repeated sensor reads, data
+conversion, output, and error handling.</p>
+<p>The IIC callback, <code>i2c_master_callback()</code>, is also
+important when adapting the configuration because it updates the event
+used by the core transfer-completion logic.</p>
+<h2 id="5-what-configuration-assumptions-were-made-for-the-reference-boards">5.
+What configuration assumptions were made for the reference boards?</h2>
+<h3 id="supported-reference-boards">Supported reference boards</h3>
+<p>Only the following boards are covered by this SBB documentation.</p>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+</colgroup>
+<thead>
+<tr>
+<th>Board</th>
+<th>SDA connection</th>
+<th>SCL connection</th>
+<th>Power</th>
+<th>Ground</th>
+<th>Additional reference-board requirement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FPB-RA0L1</td>
+<td>SDAA0 P913, J1:15</td>
+<td>SCLA0 P914, J1:14</td>
+<td>J1:9</td>
+<td>J1:6</td>
+<td>Place J9 on pins 1-2 to use on-board debug functionality.</td>
+</tr>
+<tr>
+<td>FPB-RA2E3</td>
+<td>SDA0 P401, J3:2</td>
+<td>SCL0 P400, J3:1</td>
+<td>J3:9</td>
+<td>J3:6</td>
+<td>Close E25, E28, E46, and E47 to use J-Link OB VCOM for the serial
+terminal.</td>
+</tr>
+<tr>
+<td>FPB-RA4E2</td>
+<td>SDA P101, J4:15</td>
+<td>SCL P100, J4:16</td>
+<td>J4:7</td>
+<td>J4:8</td>
+<td>No additional board-specific requirement is stated in the source
+README.</td>
+</tr>
+<tr>
+<td>FPB-RA6E2</td>
+<td>SDA P101, J4:15</td>
+<td>SCL P100, J4:16</td>
+<td>J4:7</td>
+<td>J4:8</td>
+<td>No additional board-specific requirement is stated in the source
+README.</td>
+</tr>
+<tr>
+<td>FPB-RA8E1</td>
+<td>SDA1 P511, J4:4</td>
+<td>SCL1 P512, J4:3</td>
+<td>J4:1</td>
+<td>J4:2</td>
+<td>Open J6 and J9 to use on-board debug functionality.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="iic-electrical-assumptions">IIC electrical assumptions</h3>
+<ul>
+<li>SDA and SCL must be configured for n-channel open-drain output.</li>
+<li>The source README states that external 3.9 kΩ or 4.7 kΩ I2C pull-up
+resistors are required for supported boards except a listed set. Among
+the five boards documented here, FPB-RA2E3, FPB-RA4E2, FPB-RA6E2, and
+FPB-RA8E1 are in the exception list. FPB-RA0L1 is not in that exception
+list, so the reference information requires external 3.9 kΩ or 4.7 kΩ
+pull-ups for FPB-RA0L1.</li>
+</ul>
+<h3 id="iicsensor-assumptions">IIC/Sensor assumptions</h3>
+<p>The reference implementation assumes:</p>
+<ul>
+<li>A Pmod ACL board with an ADXL345 accelerometer.</li>
+<li>ADXL345 device signature <code>0xE5</code> at register
+<code>0x00</code>.</li>
+<li><code>POWER_CTL</code> register at <code>0x2D</code>.</li>
+<li>Measurement-enable value <code>0x08</code>.</li>
+<li>Axis data beginning at register <code>0x32</code>.</li>
+<li>Six bytes of X/Y/Z sensor data per sample.</li>
+<li>The FSP-generated IIC instance symbols
+<code>g_i2c_master_ctrl</code> and <code>g_i2c_master_cfg</code> are
+available through <code>hal_data.h</code>.</li>
+<li>The IIC configuration supplies <code>i2c_master_callback()</code> as
+the callback used to signal transaction completion.</li>
+</ul>
+<h3 id="serial-terminal-assumptions">Serial terminal assumptions</h3>
+<p>The reference README specifies these terminal settings:</p>
+<ul>
+<li>Speed: 115200 baud</li>
+<li>Data: 8 bits</li>
+<li>Parity: none</li>
+<li>Stop bits: 1</li>
+<li>Flow control: none</li>
+<li>Receive newline: CR</li>
+<li>Transmit newline: CR</li>
+<li>Local echo: enabled</li>
+</ul>
+<p>The serial port is provided by J-Link On-Board in the reference
+setup.</p>
+<p>For the GCC Arm Embedded Toolchain, the README also requires
+<strong>Use float with nano printf</strong> when floating-point values
+are printed to the terminal.</p>
+<h2 id="6-what-must-i-change-for-my-board-pins-clocks-timing-memory-task-priorities-or-middleware-setup">6.
+What must I change for my board, pins, clocks, timing, memory, task
+priorities, or middleware setup?</h2>
+<p>When porting the SBB, review the items below against the new target.
+The supplied files provide concrete reference settings for pins and
+application timing, but they do not specify custom-board clock
+frequencies, memory budgets, RTOS task priorities, or middleware
+configuration values. Those items therefore must be established from the
+target project’s requirements and FSP configuration rather than copied
+from this documentation.</p>
+<h3 id="board-and-pins">Board and pins</h3>
+<p>Update the FSP pin configuration and physical connections so the
+selected IIC peripheral is routed to the target SDA and SCL pins. Ensure
+both signals use the required open-drain configuration. Provide suitable
+I2C pull-ups when they are not already present on the target board or
+attached sensor board.</p>
+<h3 id="fsp-iic-instance">FSP IIC instance</h3>
+<p>The SBB expects the generated objects:</p>
+<ul>
+<li><code>g_i2c_master_ctrl</code></li>
+<li><code>g_i2c_master_cfg</code></li>
+</ul>
+<p>If the target project uses different generated instance names, adapt
+the SBB references or align the FSP configuration with these names.</p>
+<p>The header chooses among IICA, IIC_B, and IIC Master APIs using
+MCU/board build definitions. Verify that the selected target resolves to
+the intended FSP driver.</p>
+<h3 id="sensor-configuration">Sensor configuration</h3>
+<p>If the target is not the same ADXL345/Pmod ACL setup, the following
+definitions and transaction sequence are sensor-specific and must be
+replaced as appropriate:</p>
+<ul>
+<li><code>DEVICE_ID_REG</code></li>
+<li><code>DEVICE_SIGNATURE</code></li>
+<li><code>POWER_CTL_REG</code></li>
+<li><code>ENABLE_BIT</code></li>
+<li><code>AXIS_DATA</code></li>
+<li>Data length and byte interpretation</li>
+</ul>
+<h3 id="timing">Timing</h3>
+<p>The demo uses <code>SENSOR_READ_DELAY</code> with
+<code>R_BSP_SoftwareDelay()</code> and the current constant is three
+seconds. This delay belongs to the reference application behavior rather
+than the low-level IIC transfer interface. Change it to match the
+sampling requirements of the target application.</p>
+<p>The internal transfer-completion check uses a decrementing
+<code>uint16_t</code> polling counter. Its duration is not expressed as
+a time interval in the supplied source. If deterministic timeout
+behavior is required on another target, replace or redesign this
+mechanism using timing appropriate to that application.</p>
+<h3 id="clocks-memory-rtos-priorities-and-middleware">Clocks, memory,
+RTOS priorities, and middleware</h3>
+<p>The supplied files do not document specific clock-tree values, memory
+allocations, RTOS task priorities, or middleware setup. Validate these
+items in the target FSP project when integrating the SBB. The supplied
+SBB code itself uses a callback plus foreground polling for IIC
+completion and does not contain RTOS task-management code.</p>
+<h3 id="console">Console</h3>
+<p>The reusable sensor layer does not perform application logging. The
+demo layer depends on <code>console/uart_console.h</code> and standard
+<code>printf()</code> routing. If the target application uses a
+different console or no console, replace or remove the reference
+application’s console-specific code while retaining the SBB sensor
+interface as needed.</p>
+<h2 id="7-what-dependencies-does-the-sbb-have">7. What dependencies does
+the SBB have?</h2>
+<h3 id="fsp-dependencies">FSP dependencies</h3>
+<p>The source directly depends on Renesas FSP types and generated
+configuration through <code>hal_data.h</code>. Depending on the target
+MCU/board build, the IIC wrapper macros call one of:</p>
+<ul>
+<li><code>R_IICA_MASTER_Open/Write/Read/Close</code></li>
+<li><code>R_IIC_B_MASTER_Open/Write/Read/Close</code></li>
+<li><code>R_IIC_MASTER_Open/Write/Read/Close</code></li>
+</ul>
+<p>The reference application additionally uses:</p>
+<ul>
+<li><code>R_FSP_VersionGet()</code></li>
+<li><code>R_BSP_SoftwareDelay()</code></li>
+</ul>
+<h3 id="driverconfiguration-dependencies">Driver/configuration
+dependencies</h3>
+<p>The SBB expects:</p>
+<ul>
+<li>A configured FSP IIC Master instance.</li>
+<li><code>g_i2c_master_ctrl</code>.</li>
+<li><code>g_i2c_master_cfg</code>.</li>
+<li><code>i2c_master_callback()</code> connected to the IIC Master
+callback configuration.</li>
+</ul>
+<h3 id="demo-only-service-dependency">Demo-only service dependency</h3>
+<p>The reference application includes
+<code>console/uart_console.h</code> and uses:</p>
+<ul>
+<li><code>uart_console_init()</code></li>
+<li><code>uart_console_flush()</code></li>
+<li><code>printf()</code></li>
+</ul>
+<p>These are demonstration/output dependencies rather than sensor
+transaction APIs.</p>
+<h3 id="hardware-dependencies">Hardware dependencies</h3>
+<p>The demonstrated setup requires:</p>
+<ul>
+<li>One of the five FPB boards listed in this document.</li>
+<li>A Pmod ACL/ADXL345 sensor board.</li>
+<li>SDA, SCL, power, and ground connections.</li>
+<li>A USB connection for programming/debugging.</li>
+<li>Board-specific jumper or VCOM settings where listed above.</li>
+<li>Appropriate I2C pull-ups where required.</li>
+</ul>
+<h2 id="8-what-behavior-and-performance-were-demonstrated-or-measured">8.
+What behavior and performance were demonstrated or measured?</h2>
+<h3 id="demonstrated-behavior">Demonstrated behavior</h3>
+<p>The supplied implementation demonstrates:</p>
+<ul>
+<li>Opening the IIC Master interface.</li>
+<li>Confirming communication by reading the ADXL345 device ID.</li>
+<li>Enabling accelerometer measurement.</li>
+<li>Reading six bytes of axis data.</li>
+<li>Reconstructing signed X/Y/Z values from three little-endian byte
+pairs.</li>
+<li>Printing X/Y/Z values to the UART-backed terminal.</li>
+<li>Repeating the read after a three-second software delay.</li>
+<li>Reporting FSP errors and stopping at a breakpoint when an
+initialization or read operation fails.</li>
+</ul>
+<h3 id="performance-data">Performance data</h3>
+<p>The supplied source and README do not provide measured IIC
+throughput, CPU utilization, interrupt latency, transaction latency,
+power consumption, memory footprint, or maximum sustainable sample rate.
+The three-second read interval is a reference-application delay and
+should not be interpreted as a measured performance limit of the IIC
+peripheral, FSP driver, ADXL345, or SBB.</p>
+<h2 id="9-what-files-are-safe-to-modify-and-what-files-are-generated-preset-or-demo-only">9.
+What files are safe to modify, and what files are generated, preset, or
+demo-only?</h2>
+<p>Based on the supplied files, the intended separation is:</p>
+<h3 id="reusable-sbb-source">Reusable SBB source</h3>
+<ul>
+<li><code>iic_sensor.c</code></li>
+<li><code>iic_sensor.h</code></li>
+</ul>
+<p>These contain the core behavior that should be carried into an
+application when the same sensor/IIC abstraction is desired. Sensor
+register definitions and target-selection wrappers are located here, so
+changes required for another sensor or different generated IIC instance
+may affect these files.</p>
+<h3 id="demoreference-application">Demo/reference application</h3>
+<ul>
+<li><code>iic_master_example_app.c</code></li>
+<li><code>iic_master_example_app.h</code></li>
+</ul>
+<p>These files are appropriate places to change demonstration behavior
+such as terminal messages, sample presentation, read-loop behavior, and
+the reference application’s sampling delay.</p>
+<h3 id="generatedpreset-project-content">Generated/preset project
+content</h3>
+<p>The supplied source references FSP-generated objects through
+<code>hal_data.h</code>, but the attached file set does not include or
+identify the complete set of generated FSP project files. Treat
+FSP-generated configuration output as generated content and make
+peripheral/pin configuration changes through the project’s FSP
+configuration workflow rather than relying on manual edits to generated
+code.</p>
+<h2 id="10-what-happens-if-i-modify-the-source-and-later-adopt-a-newer-sbb-release">10.
+What happens if I modify the source and later adopt a newer SBB
+release?</h2>
+<p>Local changes to reusable SBB files can conflict with changes made in
+a newer SBB release. To reduce upgrade effort:</p>
+<ul>
+<li>Keep board/application behavior in the reference/application layer
+when it does not require a change to the reusable sensor
+implementation.</li>
+<li>Keep target hardware configuration in the FSP project configuration
+where possible.</li>
+<li>Minimize changes to the public SBB interface
+(<code>init_sensor()</code>, <code>read_sensor_data()</code>, and
+<code>deinit_sensor()</code>) when application compatibility across
+releases is important.</li>
+<li>Track intentional changes to <code>iic_sensor.c</code> and
+<code>iic_sensor.h</code> in source control so they can be reviewed and
+reapplied or merged when adopting a newer SBB version.</li>
+<li>Compare a newer SBB release against the locally modified reusable
+files before replacing them. Do not assume modified files can be
+overwritten without losing application-specific changes.</li>
+</ul>
+<p>The supplied README and source do not define an automated migration
+or backward-compatibility mechanism between releases, so source-level
+differences must be reviewed when integrating a newer release.</p>
+<h2 id="reference-application-flow">Reference Application Flow</h2>
+<pre class="text"><code>hal_entry()
+    |
+    +--&gt; iic_master_example_app_run()
+             |
+             +--&gt; uart_console_init()
+             |
+             +--&gt; init_sensor()
+             |      |
+             |      +--&gt; Open configured FSP IIC Master
+             |      +--&gt; Read and verify ADXL345 device ID
+             |      +--&gt; Enable measurement mode
+             |
+             +--&gt; Loop
+                    |
+                    +--&gt; read_sensor_data()
+                    |      +--&gt; Select axis-data register
+                    |      +--&gt; Read six X/Y/Z bytes
+                    |
+                    +--&gt; Convert byte pairs to signed axis values
+                    +--&gt; Print X/Y/Z values
+                    +--&gt; Delay</code></pre>
+<h2 id="integration-checklist">Integration Checklist</h2>
+<p>Before reusing this SBB on another board or in another application,
+verify:</p>
+<ul class="task-list">
+<li><label><input type="checkbox"></input>The required FSP IIC Master driver
+is available for the target MCU.</label></li>
+<li><label><input type="checkbox"></input><code>g_i2c_master_ctrl</code> and
+<code>g_i2c_master_cfg</code> match the intended generated instance, or
+the source is adapted accordingly.</label></li>
+<li><label><input type="checkbox"></input><code>i2c_master_callback()</code>
+is connected to the configured IIC Master callback.</label></li>
+<li><label><input type="checkbox"></input>SDA/SCL pins are routed correctly
+and configured as n-channel open drain.</label></li>
+<li><label><input type="checkbox"></input>Required I2C pull-up resistors are
+present.</label></li>
+<li><label><input type="checkbox"></input>The connected device uses the
+ADXL345 register map assumed by the SBB, or the sensor-specific
+definitions/transactions have been updated.</label></li>
+<li><label><input type="checkbox"></input>The application’s sampling interval
+is appropriate rather than copied blindly from the three-second demo
+delay.</label></li>
+<li><label><input type="checkbox"></input>UART/console dependencies are
+retained only if terminal output is required.</label></li>
+<li><label><input type="checkbox"></input>Floating-point <code>printf</code>
+support is enabled when using the GCC Arm Embedded Toolchain and keeping
+the demo’s floating-point terminal output.</label></li>
+</ul>
+</body>
+</html>
